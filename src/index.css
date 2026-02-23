@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 174 72% 50%;
+    --primary-foreground: 222 47% 6%;
+
+    --secondary: 160 60% 45%;
+    --secondary-foreground: 222 47% 6%;
+
+    --muted: 220 20% 16%;
+    --muted-foreground: 218 11% 55%;
+
+    --accent: 174 72% 50%;
+    --accent-foreground: 222 47% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 20% 14%;
+    --input: 220 20% 14%;
+    --ring: 174 72% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 174 72% 50%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 47% 9%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 220 20% 14%;
+    --sidebar-ring: 174 72% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(174 72% 50% / 0.15), 0 0 60px hsl(174 72% 50% / 0.05);
+  }
+
+  .glow-border {
+    border-color: hsl(174 72% 50% / 0.3);
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover:hover {
+    transform: translateY(-4px);
+    border-color: hsl(174 72% 50% / 0.5);
+    box-shadow: 0 8px 30px hsl(174 72% 50% / 0.1);
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 15px hsl(174 72% 50% / 0.3), 0 0 45px hsl(174 72% 50% / 0.1), inset 0 0 15px hsl(174 72% 50% / 0.05);
+  }
+
+  .neon-glow-sm {
+    box-shadow: 0 0 8px hsl(174 72% 50% / 0.2), 0 0 20px hsl(174 72% 50% / 0.05);
+  }
+}
