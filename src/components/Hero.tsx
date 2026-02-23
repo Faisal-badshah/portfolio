@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
-import profilePhoto from "@/assets/profile-photo.jpg";
+import profilePhoto from "@/assets/profile-photo.png";
 
 const codeLines = [
   { key: "class", text: "class", val: " Developer {" },
