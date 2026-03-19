@@ -283,7 +283,7 @@ const ProjectCard = ({ project: p, index }: { project: Project; index: number })
       </div>
 
       <a
-        href="#"
+        href="https://qubititsolutions.com/"
         className="inline-flex items-center gap-1 text-sm text-primary hover:brightness-125 transition-colors"
       >
         View Project <ExternalLink size={12} />
