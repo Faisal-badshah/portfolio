@@ -1,21 +1,273 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import profilePhoto from "@/assets/profile-photo.webp";
 
-const codeLines = [
-  { key: "class", text: "class", val: " Developer {" },
-  { key: "name", text: "  name", val: ' = "Faisal Badshah";' },
-  { key: "role", text: "  role", val: ' = "Full-Stack Architect";' },
-  { key: "stack", text: "  stack", val: " = [React, Node, Next.js];" },
-  { key: "clients", text: "  clients", val: ' = "10+ Enterprise";' },
-  { key: "motto", text: "  motto", val: ' = "Build. Ship. Scale.";' },
-  { key: "close", text: "}", val: "" },
+/* ── Terminal script ─────────────────────────────────────────────────── */
+type Line =
+  | { type: "cmd";       text: string }
+  | { type: "out";       text: string }
+  | { type: "gap" }
+  | { type: "highlight"; text: string }
+  | { type: "link";      text: string; href: string };
+
+const SCRIPT: Line[] = [
+  { type: "cmd",       text: "whoami" },
+  { type: "out",       text: "Faisal Badshah — Full-Stack Developer" },
+  { type: "gap" },
+  { type: "cmd",       text: "cat stack.txt" },
+  { type: "out",       text: "React · Next.js · Node.js · MongoDB · PostgreSQL" },
+  { type: "out",       text: "AWS · Docker · REST APIs · WebSockets" },
+  { type: "gap" },
+  { type: "cmd",       text: "./check-availability.sh" },
+  { type: "highlight", text: "✓  Available for new projects" },
+  { type: "gap" },
+  { type: "cmd",       text: "ping clients --all" },
+  { type: "out",       text: "Qubit IT Solutions .......... ✓ satisfied" },
+  { type: "out",       text: "Touch IT Solutions .......... ✓ satisfied" },
+  { type: "out",       text: "Ride Bus .................... ✓ satisfied" },
+  { type: "gap" },
+  { type: "cmd",       text: "cat offer.txt" },
+  { type: "highlight", text: "🌙 Eid Special — websites from ₹4,999" },
+  { type: "link",      text: "→  faisal.innovixdev.com/offer", href: "/offer" },
 ];
 
+const CHAR_SPEED = 38;
+const OUT_DELAY  = 180;
+const LINE_DELAY = 320;
+const GAP_DELAY  = 220;
+const LOOP_PAUSE = 3200;
+
+/* ── Terminal ────────────────────────────────────────────────────────── */
+const Terminal = () => {
+  const [rendered, setRendered] = useState<
+    { line: Line; typed: string; done: boolean }[]
+  >([]);
+  const [cursor, setCursor] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const run = async () => {
+      while (!cancelled) {
+        setRendered([]);
+        await sleep(400);
+
+        for (let i = 0; i < SCRIPT.length; i++) {
+          if (cancelled) return;
+          const line = SCRIPT[i];
+
+          if (line.type === "gap") {
+            setRendered((p) => [...p, { line, typed: "", done: true }]);
+            await sleep(GAP_DELAY);
+            continue;
+          }
+
+          if (
+            line.type === "out" ||
+            line.type === "highlight" ||
+            line.type === "link"
+          ) {
+            await sleep(OUT_DELAY);
+            setRendered((p) => [...p, { line, typed: line.text, done: true }]);
+            await sleep(LINE_DELAY);
+            continue;
+          }
+
+          // cmd — type char by char
+          setRendered((p) => [...p, { line, typed: "", done: false }]);
+          for (let c = 1; c <= line.text.length; c++) {
+            if (cancelled) return;
+            await sleep(CHAR_SPEED);
+            setRendered((p) => {
+              const next = [...p];
+              next[next.length - 1] = {
+                line,
+                typed: line.text.slice(0, c),
+                done: c === line.text.length,
+              };
+              return next;
+            });
+          }
+          await sleep(OUT_DELAY);
+        }
+        await sleep(LOOP_PAUSE);
+      }
+    };
+
+    run();
+    const blink = setInterval(() => setCursor((c) => !c), 530);
+    return () => { cancelled = true; clearInterval(blink); };
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [rendered]);
+
+  return (
+    <div className="w-full max-w-lg rounded-xl border border-primary/20 bg-card/90 backdrop-blur-md overflow-hidden neon-glow-sm">
+      {/* Title bar */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-destructive/70" />
+          <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+          <span className="w-3 h-3 rounded-full bg-secondary/70" />
+        </div>
+        <div className="flex items-center gap-2 ml-1">
+          <img
+            src={profilePhoto}
+            alt="Faisal"
+            className="w-6 h-6 rounded-full border border-primary/40 object-cover"
+          />
+          <span className="font-mono text-[11px] text-muted-foreground">
+            faisal@innovixdev ~ %
+          </span>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div
+        className="p-5 h-[340px] overflow-y-auto font-mono text-[12px] sm:text-[13px] leading-relaxed"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {rendered.map((r, i) => {
+          const { line, typed } = r;
+          const isLast = i === rendered.length - 1;
+
+          if (line.type === "gap") return <div key={i} className="h-2" />;
+
+          if (line.type === "cmd")
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-primary select-none">❯</span>
+                <span className="text-foreground">{typed}</span>
+                {isLast && (
+                  <span
+                    className="inline-block w-[7px] h-[14px] bg-primary ml-0.5"
+                    style={{ opacity: cursor ? 1 : 0 }}
+                  />
+                )}
+              </div>
+            );
+
+          if (line.type === "highlight")
+            return (
+              <div key={i} className="text-primary font-semibold pl-4">
+                {typed}
+              </div>
+            );
+
+          if (line.type === "link")
+            return (
+              <div key={i} className="pl-4">
+                <Link
+                  to={(line as { type: "link"; text: string; href: string }).href}
+                  className="text-secondary underline underline-offset-2 hover:brightness-125 transition-colors"
+                >
+                  {typed}
+                </Link>
+              </div>
+            );
+
+          return (
+            <div key={i} className="text-muted-foreground pl-4">
+              {typed}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+};
+
+/* ── Flip card (mobile) ──────────────────────────────────────────────── */
+const codeLines = [
+  { key: "class",   text: "class",     val: " Developer {"               },
+  { key: "name",    text: "  name",    val: ' = "Faisal Badshah";'       },
+  { key: "role",    text: "  role",    val: ' = "Full-Stack Architect";'  },
+  { key: "stack",   text: "  stack",   val: " = [React, Node, Next.js];" },
+  { key: "clients", text: "  clients", val: ' = "10+ Enterprise";'       },
+  { key: "motto",   text: "  motto",   val: ' = "Build. Ship. Scale.";'  },
+  { key: "close",   text: "}",         val: ""                           },
+];
+
+const FlipCard = () => {
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    const id = setInterval(() => setFlipped((f) => !f), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      className="relative w-72 h-72 cursor-pointer"
+      style={{ perspective: "1000px" }}
+      onClick={() => setFlipped((f) => !f)}
+    >
+      <motion.div
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.7, ease: "easeInOut" }}
+        style={{ transformStyle: "preserve-3d", width: "100%", height: "100%" }}
+        className="relative"
+      >
+        {/* Front — Photo */}
+        <div
+          className="absolute inset-0 rounded-full overflow-hidden border-2 border-primary/40 neon-glow"
+          style={{ backfaceVisibility: "hidden" }}
+        >
+          <div className="absolute inset-0 rounded-full border-2 border-primary/60 scale-105 animate-pulse-glow z-10 pointer-events-none" />
+          <img
+            src={profilePhoto}
+            alt="Faisal Badshah"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute bottom-5 left-0 right-0 flex justify-center z-20">
+            <span className="font-mono text-[9px] text-primary/60 bg-background/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
+              tap to flip
+            </span>
+          </div>
+        </div>
+
+        {/* Back — Code */}
+        <div
+          className="absolute inset-0 rounded-2xl bg-card/98 backdrop-blur-md border border-primary/30 neon-glow-sm flex flex-col justify-center p-5"
+          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+        >
+          <div className="flex items-center gap-1.5 mb-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-secondary/70" />
+            <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+              developer.ts
+            </span>
+          </div>
+          <div className="font-mono text-[12px] leading-relaxed">
+            {codeLines.map((line) => (
+              <div key={line.key}>
+                <span className="text-secondary">{line.text}</span>
+                <span className="text-muted-foreground">{line.val}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-center">
+            <span className="font-mono text-[9px] text-primary/60 bg-background/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
+              tap to flip
+            </span>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
 const Hero = () => (
   <section className="min-h-screen flex items-center pt-20 pb-16 relative overflow-hidden">
-    {/* Grid pattern overlay */}
     <div
       className="absolute inset-0 opacity-[0.03] pointer-events-none"
       style={{
@@ -28,6 +280,7 @@ const Hero = () => (
 
     <div className="container mx-auto px-6 relative z-10">
       <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
         {/* Left */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -49,13 +302,15 @@ const Hero = () => (
             Faisal Badshah
           </p>
           <p className="text-base text-muted-foreground mb-3">
-            <span className="text-primary">Full-Stack Developer</span> (MERN & Next.js) | SaaS & Automation Specialist
+            <span className="text-primary">Full-Stack Developer</span> (MERN &
+            Next.js) | SaaS & Automation Specialist
           </p>
           <p className="text-muted-foreground mb-8 max-w-lg leading-relaxed">
-            I build fast, scalable web platforms that help businesses attract, convert, and retain customers.
+            I build fast, scalable web platforms that help businesses attract,
+            convert, and retain customers.
           </p>
 
-          <div className="flex flex-wrap gap-4 mb-8">
+          <div className="flex flex-wrap gap-4">
             <a
               href="https://calendly.com/faisalbadshah46/30min"
               target="_blank"
@@ -74,65 +329,24 @@ const Hero = () => (
           </div>
         </motion.div>
 
-        {/* Right – Photo + Code Block */}
+        {/* Right */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
           className="flex justify-center lg:justify-end"
         >
-          <div className="relative">
-            {/* Glowing ring */}
-            <div className="absolute inset-0 rounded-full border-2 border-primary/60 scale-105 animate-pulse-glow" />
-            <div className="w-64 h-64 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-full overflow-hidden border-2 border-primary/40 relative z-10 neon-glow">
-              <img
-                src={profilePhoto}
-                alt="Faisal Badshah - Full-Stack Developer"
-                className="w-full h-full object-cover"
-              />
-            </div>
+          {/* Mobile: flip card */}
+          <div className="block lg:hidden">
+            <FlipCard />
+          </div>
 
-            {/* Floating code block */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-              className="absolute -bottom-8 -left-12 sm:-left-20 bg-card/95 backdrop-blur-md border border-border rounded-lg p-4 z-20 neon-glow-sm"
-            >
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
-                <span className="w-2.5 h-2.5 rounded-full bg-accent/70" />
-                <span className="w-2.5 h-2.5 rounded-full bg-secondary/70" />
-                <span className="ml-2 font-mono text-[10px] text-muted-foreground">developer.ts</span>
-              </div>
-              <div className="font-mono text-[11px] sm:text-xs leading-relaxed">
-                {codeLines.map((line, i) => (
-                  <motion.div
-                    key={line.key}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.8 + i * 0.1 }}
-                  >
-                    <span className="text-secondary">{line.text}</span>
-                    <span className="text-muted-foreground">{line.val}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Floating dots */}
-            <motion.div
-              className="absolute -top-4 -right-4 w-3 h-3 rounded-full bg-primary/40"
-              animate={{ y: [0, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 3 }}
-            />
-            <motion.div
-              className="absolute -bottom-2 -left-6 w-2 h-2 rounded-full bg-secondary/40"
-              animate={{ y: [0, 6, 0] }}
-              transition={{ repeat: Infinity, duration: 4 }}
-            />
+          {/* Desktop: terminal */}
+          <div className="hidden lg:block w-full">
+            <Terminal />
           </div>
         </motion.div>
+
       </div>
     </div>
   </section>
