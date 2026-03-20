@@ -1,133 +1,152 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+const TRAIL_LENGTH = 12; // number of trail dots
+
 const CustomCursor = () => {
   const isMobile = useIsMobile();
-  const cursorRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<HTMLDivElement>(null);
+  const dotRef    = useRef<HTMLDivElement>(null);
+  const ringRef   = useRef<HTMLDivElement>(null);
+  const trailRefs = useRef<(HTMLDivElement | null)[]>([]);
+
   const [hovering, setHovering] = useState(false);
   const [clicking, setClicking] = useState(false);
-  const pos = useRef({ x: -200, y: -200 });
-  const ringPos = useRef({ x: -200, y: -200 });
+
+  const pos      = useRef({ x: -300, y: -300 });
+  const ringPos  = useRef({ x: -300, y: -300 });
+  // Trail stores the last N positions
+  const trail    = useRef<{ x: number; y: number }[]>(
+    Array.from({ length: TRAIL_LENGTH }, () => ({ x: -300, y: -300 }))
+  );
   const raf = useRef<number>(0);
 
   useEffect(() => {
     if (isMobile) return;
 
-    // Hide cursor globally via <html> style — most reliable method
     document.documentElement.style.cursor = "none";
 
-    const move = (e: MouseEvent) => {
+    const onMove = (e: MouseEvent) => {
       pos.current = { x: e.clientX, y: e.clientY };
     };
-
-    const checkHover = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isClickable = target.closest(
-        "a, button, [role='button'], input, textarea, select, [data-clickable]"
+    const onOver = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      setHovering(
+        !!t.closest("a, button, [role='button'], input, textarea, select, [data-clickable]")
       );
-      setHovering(!!isClickable);
     };
+    const onDown = () => setClicking(true);
+    const onUp   = () => setClicking(false);
 
-    const down = () => setClicking(true);
-    const up   = () => setClicking(false);
-
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseover", checkHover);
-    window.addEventListener("mousedown", down);
-    window.addEventListener("mouseup", up);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseover", onOver);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mouseup",   onUp);
 
     const animate = () => {
-      if (cursorRef.current) {
-        cursorRef.current.style.transform = `translate(${pos.current.x}px, ${pos.current.y}px)`;
+      const { x, y } = pos.current;
+
+      // Move main dot instantly
+      if (dotRef.current) {
+        dotRef.current.style.transform = `translate(${x}px, ${y}px)`;
       }
-      ringPos.current.x += (pos.current.x - ringPos.current.x) * 0.15;
-      ringPos.current.y += (pos.current.y - ringPos.current.y) * 0.15;
+
+      // Smooth lag for outer ring
+      ringPos.current.x += (x - ringPos.current.x) * 0.12;
+      ringPos.current.y += (y - ringPos.current.y) * 0.12;
       if (ringRef.current) {
-        ringRef.current.style.transform = `translate(${ringPos.current.x}px, ${ringPos.current.y}px)`;
+        ringRef.current.style.transform =
+          `translate(${ringPos.current.x}px, ${ringPos.current.y}px)`;
       }
+
+      // Shift trail — push current pos to front, drop last
+      trail.current = [{ x, y }, ...trail.current.slice(0, TRAIL_LENGTH - 1)];
+
+      // Update each trail dot
+      trailRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const t = trail.current[i];
+        // Each successive dot: smaller, more transparent, more lagged
+        const progress = i / TRAIL_LENGTH; // 0 = closest, 1 = oldest
+        const size     = Math.max(2, 9 - i * 0.6);
+        const opacity  = (1 - progress) * (clicking ? 0.7 : hovering ? 0.55 : 0.45);
+        el.style.transform = `translate(${t.x}px, ${t.y}px)`;
+        el.style.width     = `${size}px`;
+        el.style.height    = `${size}px`;
+        el.style.opacity   = String(opacity);
+      });
+
       raf.current = requestAnimationFrame(animate);
     };
     animate();
 
     return () => {
       document.documentElement.style.cursor = "";
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseover", checkHover);
-      window.removeEventListener("mousedown", down);
-      window.removeEventListener("mouseup", up);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseover", onOver);
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mouseup",   onUp);
       cancelAnimationFrame(raf.current);
     };
   }, [isMobile]);
 
   if (isMobile) return null;
 
+  // Teal color matches your --primary: hsl(174 72% 50%)
+  const teal = "hsl(174, 72%, 50%)";
+
   return (
     <>
-      {/* Dot + crosshair */}
-      <div
-        ref={cursorRef}
-        className="fixed top-0 left-0 z-[9999] pointer-events-none"
-        style={{ willChange: "transform" }}
-      >
-        {/* Center dot — white, always visible */}
+      {/* Trail dots — rendered back to front so head is on top */}
+      {Array.from({ length: TRAIL_LENGTH }).map((_, i) => (
         <div
-          className={`-translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-100 ${
-            clicking
-              ? "w-2 h-2 bg-white opacity-100"
-              : hovering
-              ? "w-2.5 h-2.5 bg-white opacity-100"
-              : "w-1.5 h-1.5 bg-white opacity-95"
-          }`}
+          key={i}
+          ref={(el) => { trailRefs.current[i] = el; }}
+          className="fixed top-0 left-0 z-[9997] pointer-events-none rounded-full"
+          style={{
+            willChange: "transform",
+            backgroundColor: teal,
+            width: "9px",
+            height: "9px",
+            marginLeft: "-4.5px",
+            marginTop: "-4.5px",
+            // Slightly warmer/lighter color for older dots — comet glow feel
+            filter: i < 3 ? "brightness(1.2)" : i > 8 ? "brightness(0.6)" : "none",
+          }}
         />
+      ))}
 
-        {/* Default crosshair */}
-        {!hovering && (
-          <>
-            {/* Cardinal lines */}
-            <div className="absolute left-1/2 -translate-x-1/2 -top-3 w-px h-2 bg-white/70" />
-            <div className="absolute left-1/2 -translate-x-1/2 top-1 w-px h-2 bg-white/70" />
-            <div className="absolute top-1/2 -translate-y-1/2 -left-3 h-px w-2 bg-white/70" />
-            <div className="absolute top-1/2 -translate-y-1/2 left-1 h-px w-2 bg-white/70" />
-            {/* Corner bracket ticks — teal */}
-            <div className="absolute -top-3.5 -left-3.5 w-2 h-px bg-primary/90" />
-            <div className="absolute -top-3.5 -left-3.5 w-px h-2 bg-primary/90" />
-            <div className="absolute -top-3.5 -right-3.5 w-2 h-px bg-primary/90" />
-            <div className="absolute -top-3.5 -right-3.5 w-px h-2 bg-primary/90" />
-            <div className="absolute -bottom-3.5 -left-3.5 w-2 h-px bg-primary/90" />
-            <div className="absolute -bottom-3.5 -left-3.5 w-px h-2 bg-primary/90" />
-            <div className="absolute -bottom-3.5 -right-3.5 w-2 h-px bg-primary/90" />
-            <div className="absolute -bottom-3.5 -right-3.5 w-px h-2 bg-primary/90" />
-          </>
-        )}
+      {/* Main dot — bright teal, sharp */}
+      <div
+        ref={dotRef}
+        className="fixed top-0 left-0 z-[9999] pointer-events-none rounded-full"
+        style={{
+          willChange: "transform",
+          width:  clicking ? "10px" : hovering ? "12px" : "8px",
+          height: clicking ? "10px" : hovering ? "12px" : "8px",
+          marginLeft: clicking ? "-5px" : hovering ? "-6px" : "-4px",
+          marginTop:  clicking ? "-5px" : hovering ? "-6px" : "-4px",
+          backgroundColor: "#fff",
+          transition: "width 0.15s, height 0.15s, margin 0.15s",
+          boxShadow: `0 0 6px 2px ${teal}`,
+        }}
+      />
 
-        {/* Hover crosshair — teal ticks */}
-        {hovering && !clicking && (
-          <>
-            <div className="absolute left-1/2 -translate-x-1/2 -top-4 w-px h-2.5 bg-primary" />
-            <div className="absolute left-1/2 -translate-x-1/2 top-1.5 w-px h-2.5 bg-primary" />
-            <div className="absolute top-1/2 -translate-y-1/2 -left-4 h-px w-2.5 bg-primary" />
-            <div className="absolute top-1/2 -translate-y-1/2 left-1.5 h-px w-2.5 bg-primary" />
-          </>
-        )}
-      </div>
-
-      {/* Lagging outer ring */}
+      {/* Lagging ring — only on hover */}
       <div
         ref={ringRef}
-        className="fixed top-0 left-0 z-[9998] pointer-events-none"
-        style={{ willChange: "transform" }}
-      >
-        <div
-          className={`-translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-all duration-300 ${
-            clicking
-              ? "w-5 h-5 border-white/90 scale-75"
-              : hovering
-              ? "w-12 h-12 border-primary/80 neon-glow-sm"
-              : "w-8 h-8 border-white/25"
-          }`}
-        />
-      </div>
+        className="fixed top-0 left-0 z-[9998] pointer-events-none rounded-full"
+        style={{
+          willChange: "transform",
+          width:       hovering ? "44px" : "0px",
+          height:      hovering ? "44px" : "0px",
+          marginLeft:  hovering ? "-22px" : "0px",
+          marginTop:   hovering ? "-22px" : "0px",
+          border:      `1.5px solid ${teal}`,
+          opacity:     hovering ? 0.6 : 0,
+          transition:  "width 0.25s, height 0.25s, margin 0.25s, opacity 0.25s",
+          boxShadow:   hovering ? `0 0 10px ${teal}40` : "none",
+        }}
+      />
     </>
   );
 };
