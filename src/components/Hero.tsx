@@ -33,19 +33,27 @@ const SCRIPT: Line[] = [
   { type: "link",      text: "→  faisal.innovixdev.com/offer", href: "/offer" },
 ];
 
-const CHAR_SPEED = 38;
-const OUT_DELAY  = 180;
-const LINE_DELAY = 320;
-const GAP_DELAY  = 220;
-const LOOP_PAUSE = 3200;
+const CHAR_SPEED  = 38;
+const OUT_DELAY   = 160;
+const LINE_DELAY  = 280;
+const GAP_DELAY   = 180;
+const LOOP_PAUSE  = 4000;
 
 /* ── Terminal ────────────────────────────────────────────────────────── */
 const Terminal = () => {
   const [rendered, setRendered] = useState<
-    { line: Line; typed: string; done: boolean }[]
+    { line: Line; typed: string }[]
   >([]);
-  const [cursor, setCursor] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [cursor, setCursor]   = useState(true);
+  const [fading,  setFading]  = useState(false);
+  const bodyRef   = useRef<HTMLDivElement>(null);
+
+  // Scroll only INSIDE the terminal box — not the page
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [rendered]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,15 +61,20 @@ const Terminal = () => {
 
     const run = async () => {
       while (!cancelled) {
+        // Fade out old content smoothly before clearing
+        setFading(true);
+        await sleep(600);
+        if (cancelled) return;
         setRendered([]);
-        await sleep(400);
+        setFading(false);
+        await sleep(300);
 
         for (let i = 0; i < SCRIPT.length; i++) {
           if (cancelled) return;
           const line = SCRIPT[i];
 
           if (line.type === "gap") {
-            setRendered((p) => [...p, { line, typed: "", done: true }]);
+            setRendered((p) => [...p, { line, typed: "" }]);
             await sleep(GAP_DELAY);
             continue;
           }
@@ -72,28 +85,25 @@ const Terminal = () => {
             line.type === "link"
           ) {
             await sleep(OUT_DELAY);
-            setRendered((p) => [...p, { line, typed: line.text, done: true }]);
+            setRendered((p) => [...p, { line, typed: line.text }]);
             await sleep(LINE_DELAY);
             continue;
           }
 
           // cmd — type char by char
-          setRendered((p) => [...p, { line, typed: "", done: false }]);
+          setRendered((p) => [...p, { line, typed: "" }]);
           for (let c = 1; c <= line.text.length; c++) {
             if (cancelled) return;
             await sleep(CHAR_SPEED);
             setRendered((p) => {
               const next = [...p];
-              next[next.length - 1] = {
-                line,
-                typed: line.text.slice(0, c),
-                done: c === line.text.length,
-              };
+              next[next.length - 1] = { line, typed: line.text.slice(0, c) };
               return next;
             });
           }
           await sleep(OUT_DELAY);
         }
+
         await sleep(LOOP_PAUSE);
       }
     };
@@ -103,14 +113,11 @@ const Terminal = () => {
     return () => { cancelled = true; clearInterval(blink); };
   }, []);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [rendered]);
-
   return (
     <div className="w-full max-w-lg rounded-xl border border-primary/20 bg-card/90 backdrop-blur-md overflow-hidden neon-glow-sm">
+
       {/* Title bar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-muted/30">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-muted/30 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-full bg-destructive/70" />
           <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
@@ -128,26 +135,33 @@ const Terminal = () => {
         </div>
       </div>
 
-      {/* Body */}
+      {/* Body — fixed height, scrolls internally only */}
       <div
-        className="p-5 h-[340px] overflow-y-auto font-mono text-[12px] sm:text-[13px] leading-relaxed"
-        style={{ scrollbarWidth: "none" }}
+        ref={bodyRef}
+        className="p-5 font-mono text-[12px] sm:text-[13px] leading-relaxed overflow-y-auto transition-opacity duration-500"
+        style={{
+          height: "340px",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          opacity: fading ? 0 : 1,
+        }}
       >
         {rendered.map((r, i) => {
           const { line, typed } = r;
           const isLast = i === rendered.length - 1;
 
-          if (line.type === "gap") return <div key={i} className="h-2" />;
+          if (line.type === "gap")
+            return <div key={i} className="h-2" />;
 
           if (line.type === "cmd")
             return (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-primary select-none">❯</span>
+              <div key={i} className="flex items-center gap-2 min-h-[1.5em]">
+                <span className="text-primary select-none flex-shrink-0">❯</span>
                 <span className="text-foreground">{typed}</span>
                 {isLast && (
                   <span
-                    className="inline-block w-[7px] h-[14px] bg-primary ml-0.5"
-                    style={{ opacity: cursor ? 1 : 0 }}
+                    className="inline-block w-[7px] h-[13px] bg-primary ml-0.5 flex-shrink-0"
+                    style={{ opacity: cursor ? 1 : 0, transition: "opacity 0.1s" }}
                   />
                 )}
               </div>
@@ -155,14 +169,14 @@ const Terminal = () => {
 
           if (line.type === "highlight")
             return (
-              <div key={i} className="text-primary font-semibold pl-4">
+              <div key={i} className="text-primary font-semibold pl-4 min-h-[1.5em]">
                 {typed}
               </div>
             );
 
           if (line.type === "link")
             return (
-              <div key={i} className="pl-4">
+              <div key={i} className="pl-4 min-h-[1.5em]">
                 <Link
                   to={(line as { type: "link"; text: string; href: string }).href}
                   className="text-secondary underline underline-offset-2 hover:brightness-125 transition-colors"
@@ -173,12 +187,11 @@ const Terminal = () => {
             );
 
           return (
-            <div key={i} className="text-muted-foreground pl-4">
+            <div key={i} className="text-muted-foreground pl-4 min-h-[1.5em]">
               {typed}
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
@@ -213,7 +226,6 @@ const FlipCard = () => {
         animate={{ rotateY: flipped ? 180 : 0 }}
         transition={{ duration: 0.7, ease: "easeInOut" }}
         style={{ transformStyle: "preserve-3d", width: "100%", height: "100%" }}
-        className="relative"
       >
         {/* Front — Photo */}
         <div
@@ -242,9 +254,7 @@ const FlipCard = () => {
             <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
             <span className="w-2.5 h-2.5 rounded-full bg-secondary/70" />
-            <span className="ml-2 font-mono text-[10px] text-muted-foreground">
-              developer.ts
-            </span>
+            <span className="ml-2 font-mono text-[10px] text-muted-foreground">developer.ts</span>
           </div>
           <div className="font-mono text-[12px] leading-relaxed">
             {codeLines.map((line) => (
@@ -290,14 +300,11 @@ const Hero = () => (
           <span className="inline-block font-mono text-sm text-primary mb-4 tracking-wider">
             // I Help Businesses Grow Online
           </span>
-
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.1] mb-6">
             Turn Your Website Into a{" "}
             <span className="text-gradient">Client-Generating Machine</span>
           </h1>
-
           <div className="w-16 h-0.5 bg-primary/50 mb-6" />
-
           <p className="font-display text-2xl sm:text-3xl font-semibold mb-1">
             Faisal Badshah
           </p>
@@ -309,7 +316,6 @@ const Hero = () => (
             I build fast, scalable web platforms that help businesses attract,
             convert, and retain customers.
           </p>
-
           <div className="flex flex-wrap gap-4">
             <a
               href="https://calendly.com/faisalbadshah46/30min"
@@ -336,12 +342,9 @@ const Hero = () => (
           transition={{ duration: 0.8, delay: 0.3 }}
           className="flex justify-center lg:justify-end"
         >
-          {/* Mobile: flip card */}
           <div className="block lg:hidden">
             <FlipCard />
           </div>
-
-          {/* Desktop: terminal */}
           <div className="hidden lg:block w-full">
             <Terminal />
           </div>
