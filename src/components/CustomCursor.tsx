@@ -1,115 +1,148 @@
-import { useEffect, useRef, useState } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useEffect, useRef } from "react";
 
-const CustomCursor = () => {
-  const isMobile = useIsMobile();
-  const cursorRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<HTMLDivElement>(null);
-  const [hovering, setHovering] = useState(false);
-  const [clicking, setClicking] = useState(false);
-  const pos = useRef({ x: -100, y: -100 });
-  const ringPos = useRef({ x: -100, y: -100 });
-  const raf = useRef<number>(0);
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+}
+
+const ConstellationBackground = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: -1000, y: -1000 });
+  const particlesRef = useRef<Particle[]>([]);
+  const animationRef = useRef<number>(0);
 
   useEffect(() => {
-    if (isMobile) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    document.body.style.cursor = "none";
-
-    const move = (e: MouseEvent) => {
-      pos.current = { x: e.clientX, y: e.clientY };
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = document.documentElement.scrollHeight;
+      initParticles();
     };
 
-    const checkHover = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isClickable = target.closest("a, button, [role='button'], input, textarea, select, [data-clickable]");
-      setHovering(!!isClickable);
+    const initParticles = () => {
+      // More stars: 1 per 6000px² instead of 12000px²
+      // Minimum 120, maximum 220
+      const area = canvas.width * canvas.height;
+      const count = Math.min(220, Math.max(120, Math.floor(area / 6000)));
+      particlesRef.current = Array.from({ length: count }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        radius: Math.random() * 1.8 + 0.4,
+      }));
     };
 
-    const down = () => setClicking(true);
-    const up = () => setClicking(false);
+    resize();
+    window.addEventListener("resize", resize);
 
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseover", checkHover);
-    window.addEventListener("mousedown", down);
-    window.addEventListener("mouseup", up);
+    const onMouseMove = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY + window.scrollY };
+    };
+    const onMouseLeave = () => {
+      mouseRef.current = { x: -1000, y: -1000 };
+    };
+    const onScroll = () => {
+      canvas.height = document.documentElement.scrollHeight;
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseleave", onMouseLeave);
+    window.addEventListener("scroll", onScroll);
+
+    // Slightly larger connection distance for denser feel
+    const connectionDist = 160;
+    const mouseDist      = 220;
 
     const animate = () => {
-      if (cursorRef.current) {
-        cursorRef.current.style.transform = `translate(${pos.current.x}px, ${pos.current.y}px)`;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const particles = particlesRef.current;
+      const mouse = mouseRef.current;
+
+      // Move + draw stars
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+        const dMouse = Math.hypot(p.x - mouse.x, p.y - mouse.y);
+        // Stars near mouse are brighter and slightly larger
+        const nearMouse = dMouse < mouseDist;
+        const brightness = nearMouse ? 0.95 : 0.45;
+        const radius = nearMouse ? p.radius * 1.4 : p.radius;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(174, 72%, 50%, ${brightness})`;
+        ctx.fill();
       }
-      // Smooth follow for ring
-      ringPos.current.x += (pos.current.x - ringPos.current.x) * 0.15;
-      ringPos.current.y += (pos.current.y - ringPos.current.y) * 0.15;
-      if (ringRef.current) {
-        ringRef.current.style.transform = `translate(${ringPos.current.x}px, ${ringPos.current.y}px)`;
+
+      // Star-to-star connections
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dist = Math.hypot(
+            particles[i].x - particles[j].x,
+            particles[i].y - particles[j].y
+          );
+          if (dist < connectionDist) {
+            // Stronger base opacity: 0.18 instead of 0.12
+            const opacity = (1 - dist / connectionDist) * 0.18;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `hsla(174, 72%, 50%, ${opacity})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
       }
-      raf.current = requestAnimationFrame(animate);
+
+      // Mouse-to-star connections — much stronger and wider reach
+      for (const p of particles) {
+        const d = Math.hypot(p.x - mouse.x, p.y - mouse.y);
+        if (d < mouseDist) {
+          // Opacity goes up to 0.55 right next to cursor (was 0.25)
+          const opacity = (1 - d / mouseDist) * 0.55;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.strokeStyle = `hsla(160, 60%, 55%, ${opacity})`;
+          // Thicker lines near cursor
+          ctx.lineWidth = d < mouseDist * 0.4 ? 1.2 : 0.8;
+          ctx.stroke();
+        }
+      }
+
+      animationRef.current = requestAnimationFrame(animate);
     };
+
     animate();
 
     return () => {
-      document.body.style.cursor = "";
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseover", checkHover);
-      window.removeEventListener("mousedown", down);
-      window.removeEventListener("mouseup", up);
-      cancelAnimationFrame(raf.current);
+      cancelAnimationFrame(animationRef.current);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseleave", onMouseLeave);
+      window.removeEventListener("scroll", onScroll);
     };
-  }, [isMobile]);
-
-  if (isMobile) return null;
+  }, []);
 
   return (
-    <>
-      {/* Crosshair dot */}
-      <div
-        ref={cursorRef}
-        className="fixed top-0 left-0 z-[9999] pointer-events-none"
-        style={{ willChange: "transform" }}
-      >
-        <div
-          className={`-translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-150 ${
-            clicking
-              ? "w-1.5 h-1.5 bg-primary opacity-100"
-              : hovering
-              ? "w-2 h-2 bg-primary opacity-90"
-              : "w-1 h-1 bg-primary opacity-80"
-          }`}
-        />
-        {/* Crosshair lines */}
-        {!hovering && (
-          <>
-            <div className="absolute left-1/2 -translate-x-1/2 -top-2.5 w-px h-1.5 bg-primary/60" />
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 w-px h-1.5 bg-primary/60" />
-            <div className="absolute top-1/2 -translate-y-1/2 -left-2.5 h-px w-1.5 bg-primary/60" />
-            <div className="absolute top-1/2 -translate-y-1/2 -right-0.5 h-px w-1.5 bg-primary/60" />
-          </>
-        )}
-      </div>
-
-      {/* Outer ring */}
-      <div
-        ref={ringRef}
-        className="fixed top-0 left-0 z-[9998] pointer-events-none"
-        style={{ willChange: "transform" }}
-      >
-        <div
-          className={`-translate-x-1/2 -translate-y-1/2 rounded-full border transition-all duration-300 ${
-            clicking
-              ? "w-6 h-6 border-primary/80 neon-glow-sm scale-75"
-              : hovering
-              ? "w-10 h-10 border-primary/60 neon-glow-sm"
-              : "w-7 h-7 border-primary/20"
-          }`}
-        />
-      </div>
-
-      <style>{`
-        *, *::before, *::after { cursor: none !important; }
-      `}</style>
-    </>
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 z-0 pointer-events-none"
+      // Slightly higher opacity so stars are more visible
+      style={{ opacity: 0.7 }}
+    />
   );
 };
 
-export default CustomCursor;
+export default ConstellationBackground;
