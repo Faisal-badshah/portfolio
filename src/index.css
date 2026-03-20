@@ -68,6 +68,10 @@
   html {
     scroll-behavior: smooth;
   }
+  /* Hide default cursor globally — CustomCursor handles it */
+html:not(.is-mobile) * {
+  cursor: none !important;
+}
 }
 
 @layer utilities {
