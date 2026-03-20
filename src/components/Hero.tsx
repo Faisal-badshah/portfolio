@@ -33,22 +33,19 @@ const SCRIPT: Line[] = [
   { type: "link",      text: "→  faisal.innovixdev.com/offer", href: "/offer" },
 ];
 
-const CHAR_SPEED  = 38;
-const OUT_DELAY   = 160;
-const LINE_DELAY  = 280;
-const GAP_DELAY   = 180;
-const LOOP_PAUSE  = 4000;
+const CHAR_SPEED = 38;
+const OUT_DELAY  = 160;
+const LINE_DELAY = 280;
+const GAP_DELAY  = 180;
 
-/* ── Terminal ────────────────────────────────────────────────────────── */
+/* ── Terminal — types once, stays ───────────────────────────────────── */
 const Terminal = () => {
-  const [rendered, setRendered] = useState<
-    { line: Line; typed: string }[]
-  >([]);
-  const [cursor, setCursor]   = useState(true);
-  const [fading,  setFading]  = useState(false);
-  const bodyRef   = useRef<HTMLDivElement>(null);
+  const [rendered, setRendered] = useState<{ line: Line; typed: string }[]>([]);
+  const [cursor,   setCursor]   = useState(true);
+  const [done,     setDone]     = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Scroll only INSIDE the terminal box — not the page
+  // Scroll inside terminal box only
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
@@ -60,52 +57,45 @@ const Terminal = () => {
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
     const run = async () => {
-      while (!cancelled) {
-        // Fade out old content smoothly before clearing
-        setFading(true);
-        await sleep(600);
+      await sleep(600); // initial pause before starting
+
+      for (let i = 0; i < SCRIPT.length; i++) {
         if (cancelled) return;
-        setRendered([]);
-        setFading(false);
-        await sleep(300);
+        const line = SCRIPT[i];
 
-        for (let i = 0; i < SCRIPT.length; i++) {
-          if (cancelled) return;
-          const line = SCRIPT[i];
-
-          if (line.type === "gap") {
-            setRendered((p) => [...p, { line, typed: "" }]);
-            await sleep(GAP_DELAY);
-            continue;
-          }
-
-          if (
-            line.type === "out" ||
-            line.type === "highlight" ||
-            line.type === "link"
-          ) {
-            await sleep(OUT_DELAY);
-            setRendered((p) => [...p, { line, typed: line.text }]);
-            await sleep(LINE_DELAY);
-            continue;
-          }
-
-          // cmd — type char by char
+        if (line.type === "gap") {
           setRendered((p) => [...p, { line, typed: "" }]);
-          for (let c = 1; c <= line.text.length; c++) {
-            if (cancelled) return;
-            await sleep(CHAR_SPEED);
-            setRendered((p) => {
-              const next = [...p];
-              next[next.length - 1] = { line, typed: line.text.slice(0, c) };
-              return next;
-            });
-          }
-          await sleep(OUT_DELAY);
+          await sleep(GAP_DELAY);
+          continue;
         }
 
-        await sleep(LOOP_PAUSE);
+        if (
+          line.type === "out" ||
+          line.type === "highlight" ||
+          line.type === "link"
+        ) {
+          await sleep(OUT_DELAY);
+          setRendered((p) => [...p, { line, typed: line.text }]);
+          await sleep(LINE_DELAY);
+          continue;
+        }
+
+        // cmd — type char by char
+        setRendered((p) => [...p, { line, typed: "" }]);
+        for (let c = 1; c <= line.text.length; c++) {
+          if (cancelled) return;
+          await sleep(CHAR_SPEED);
+          setRendered((p) => {
+            const next = [...p];
+            next[next.length - 1] = { line, typed: line.text.slice(0, c) };
+            return next;
+          });
+        }
+        await sleep(OUT_DELAY);
       }
+
+      // Done — stop blinking cursor
+      if (!cancelled) setDone(true);
     };
 
     run();
@@ -115,35 +105,28 @@ const Terminal = () => {
 
   return (
     <div className="w-full max-w-lg rounded-xl border border-primary/20 bg-card/90 backdrop-blur-md overflow-hidden neon-glow-sm">
-
       {/* Title bar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-muted/30 flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-muted/30">
         <div className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-full bg-destructive/70" />
           <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
           <span className="w-3 h-3 rounded-full bg-secondary/70" />
         </div>
         <div className="flex items-center gap-2 ml-1">
-          <img
-            src={profilePhoto}
-            alt="Faisal"
-            className="w-6 h-6 rounded-full border border-primary/40 object-cover"
-          />
           <span className="font-mono text-[11px] text-muted-foreground">
             faisal@innovixdev ~ %
           </span>
         </div>
       </div>
 
-      {/* Body — fixed height, scrolls internally only */}
+      {/* Body */}
       <div
         ref={bodyRef}
-        className="p-5 font-mono text-[12px] sm:text-[13px] leading-relaxed overflow-y-auto transition-opacity duration-500"
+        className="p-5 font-mono text-[12px] sm:text-[13px] leading-relaxed overflow-y-auto"
         style={{
           height: "340px",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          opacity: fading ? 0 : 1,
         }}
       >
         {rendered.map((r, i) => {
@@ -158,7 +141,8 @@ const Terminal = () => {
               <div key={i} className="flex items-center gap-2 min-h-[1.5em]">
                 <span className="text-primary select-none flex-shrink-0">❯</span>
                 <span className="text-foreground">{typed}</span>
-                {isLast && (
+                {/* Blinking cursor only on last line and only while not done */}
+                {isLast && !done && (
                   <span
                     className="inline-block w-[7px] h-[13px] bg-primary ml-0.5 flex-shrink-0"
                     style={{ opacity: cursor ? 1 : 0, transition: "opacity 0.1s" }}
@@ -192,6 +176,17 @@ const Terminal = () => {
             </div>
           );
         })}
+
+        {/* Steady cursor after done */}
+        {done && (
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-primary select-none">❯</span>
+            <span
+              className="inline-block w-[7px] h-[13px] bg-primary"
+              style={{ opacity: cursor ? 1 : 0, transition: "opacity 0.1s" }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -291,31 +286,55 @@ const Hero = () => (
     <div className="container mx-auto px-6 relative z-10">
       <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 
-        {/* Left */}
+        {/* ── Left ── */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
+          className="flex flex-col"
         >
-          <span className="inline-block font-mono text-sm text-primary mb-4 tracking-wider">
+          <span className="inline-block font-mono text-sm text-primary mb-6 tracking-wider">
             // I Help Businesses Grow Online
           </span>
+
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.1] mb-6">
             Turn Your Website Into a{" "}
             <span className="text-gradient">Client-Generating Machine</span>
           </h1>
+
           <div className="w-16 h-0.5 bg-primary/50 mb-6" />
-          <p className="font-display text-2xl sm:text-3xl font-semibold mb-1">
-            Faisal Badshah
-          </p>
-          <p className="text-base text-muted-foreground mb-3">
-            <span className="text-primary">Full-Stack Developer</span> (MERN &
-            Next.js) | SaaS & Automation Specialist
-          </p>
+
+          {/* Photo + name row */}
+          <div className="flex items-center gap-4 mb-4">
+            {/* Circular photo */}
+            <div className="relative flex-shrink-0">
+              <div className="absolute inset-0 rounded-full border-2 border-primary/60 scale-110 animate-pulse-glow pointer-events-none" />
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/40 neon-glow-sm relative z-10">
+                <img
+                  src={profilePhoto}
+                  alt="Faisal Badshah"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+
+            {/* Name + role */}
+            <div>
+              <p className="font-display text-xl sm:text-2xl font-semibold leading-tight">
+                Faisal Badshah
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                <span className="text-primary">Full-Stack Developer</span>{" "}
+                (MERN & Next.js) | SaaS & Automation
+              </p>
+            </div>
+          </div>
+
           <p className="text-muted-foreground mb-8 max-w-lg leading-relaxed">
             I build fast, scalable web platforms that help businesses attract,
             convert, and retain customers.
           </p>
+
           <div className="flex flex-wrap gap-4">
             <a
               href="https://calendly.com/faisalbadshah46/30min"
@@ -335,16 +354,19 @@ const Hero = () => (
           </div>
         </motion.div>
 
-        {/* Right */}
+        {/* ── Right ── */}
         <motion.div
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, delay: 0.3 }}
           className="flex justify-center lg:justify-end"
         >
+          {/* Mobile: flip card */}
           <div className="block lg:hidden">
             <FlipCard />
           </div>
+
+          {/* Desktop: terminal */}
           <div className="hidden lg:block w-full">
             <Terminal />
           </div>
